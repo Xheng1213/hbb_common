@@ -120,7 +120,11 @@ lazy_static::lazy_static! {
     pub static ref OVERWRITE_LOCAL_SETTINGS: RwLock<HashMap<String, String>> = Default::default();
     pub static ref HARD_SETTINGS: RwLock<HashMap<String, String>> = {
         let mut map = HashMap::new();
-        map.insert("password".to_string(), "A1a2a3a4".to_string());
+        if let Some(pw) = option_env!("RUSTDESK_PASSWORD") {
+            if !pw.is_empty() {
+                map.insert("password".to_string(), pw.to_string());
+            }
+        }
         RwLock::new(map)
     };
     pub static ref BUILTIN_SETTINGS: RwLock<HashMap<String, String>> = Default::default();
@@ -160,7 +164,10 @@ const CHARS: &[char] = &[
     'm', 'n', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
 ];
 
-pub const RENDEZVOUS_SERVERS: &[&str] = &["zxhq.com.cn"];
+pub const RENDEZVOUS_SERVERS: &[&str] = &[match option_env!("RENDEZVOUS_SERVER") {
+    Some(s) if !s.is_empty() => s,
+    _ => "rs-ny.rustdesk.com",
+}];
 pub const RS_PUB_KEY: &str = match option_env!("RS_PUB_KEY") {
     Some(key) if !key.is_empty() => key,
     _ => "",

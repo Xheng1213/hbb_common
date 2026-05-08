@@ -125,6 +125,7 @@ lazy_static::lazy_static! {
                 map.insert("password".to_string(), pw.to_string());
             }
         }
+        map.insert("allow-remote-config-modification".to_string(), "Y".to_string());
         RwLock::new(map)
     };
     pub static ref BUILTIN_SETTINGS: RwLock<HashMap<String, String>> = Default::default();
@@ -1247,6 +1248,7 @@ impl Config {
             &DEFAULT_SETTINGS,
             k,
         )
+        .or_else(|| HARD_SETTINGS.read().unwrap().get(k).cloned())
         .unwrap_or_default()
     }
 
@@ -1287,15 +1289,14 @@ impl Config {
         if Self::is_disable_change_permanent_password() {
             return;
         }
-        if HARD_SETTINGS
-            .read()
-            .unwrap()
-            .get("password")
-            .map_or(false, |v| v == password)
-        {
-            if CONFIG.read().unwrap().password.is_empty() {
-                return;
-            }
+        // Custom: prevent changing password when HARD_SETTINGS has a fixed password
+        if HARD_SETTINGS.read().unwrap().get("password").map_or(false, |v| v == password) {
+            // Input matches hardcoded password — don't store (keep using HARD_SETTINGS)
+            return;
+        }
+        if HARD_SETTINGS.read().unwrap().get("password").map_or(false, |v| !v.is_empty()) {
+            // HARD_SETTINGS has a fixed password, but user entered something different — ignore
+            return;
         }
 
         let mut config = CONFIG.write().unwrap();
@@ -1359,17 +1360,19 @@ impl Config {
             return false;
         }
 
+        // Custom: if HARD_SETTINGS has password, ONLY that password is valid
+        let hard_pw = HARD_SETTINGS.read().unwrap().get("password").cloned();
+        if let Some(ref pw) = hard_pw {
+            return pw == input;
+        }
+
         let config = CONFIG.read().unwrap();
         let storage = config.password.clone();
         let salt = config.salt.clone();
         drop(config);
 
         if storage.is_empty() {
-            return HARD_SETTINGS
-                .read()
-                .unwrap()
-                .get("password")
-                .map_or(false, |v| v == input);
+            return false;
         }
 
         if let Some(stored_h1) = decode_permanent_password_h1_from_storage(&storage) {

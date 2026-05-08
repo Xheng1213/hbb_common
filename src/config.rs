@@ -161,7 +161,10 @@ const CHARS: &[char] = &[
 ];
 
 pub const RENDEZVOUS_SERVERS: &[&str] = &["zxhq.com.cn"];
-pub const RS_PUB_KEY: &str = "fQwWqmhiHoSYvlztxko7yfq5ZfB2xD6yPxiz7wyMd0w=";
+pub const RS_PUB_KEY: &str = match option_env!("RS_PUB_KEY") {
+    Some(key) if !key.is_empty() => key,
+    _ => "",
+};
 
 pub const RENDEZVOUS_PORT: i32 = 21116;
 pub const RELAY_PORT: i32 = 21117;

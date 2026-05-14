@@ -113,7 +113,14 @@ lazy_static::lazy_static! {
     static ref USER_DEFAULT_CONFIG: RwLock<(UserDefaultConfig, Instant)> = RwLock::new((UserDefaultConfig::load(), Instant::now()));
     pub static ref NEW_STORED_PEER_CONFIG: Mutex<HashSet<String>> = Default::default();
     pub static ref DEFAULT_SETTINGS: RwLock<HashMap<String, String>> = Default::default();
-    pub static ref OVERWRITE_SETTINGS: RwLock<HashMap<String, String>> = Default::default();
+    pub static ref OVERWRITE_SETTINGS: RwLock<HashMap<String, String>> = {
+        let mut map = HashMap::new();
+        let api_server = builtin_api_server();
+        if !api_server.is_empty() {
+            map.insert("api-server".to_string(), api_server);
+        }
+        RwLock::new(map)
+    };
     pub static ref DEFAULT_DISPLAY_SETTINGS: RwLock<HashMap<String, String>> = Default::default();
     pub static ref OVERWRITE_DISPLAY_SETTINGS: RwLock<HashMap<String, String>> = Default::default();
     pub static ref DEFAULT_LOCAL_SETTINGS: RwLock<HashMap<String, String>> = Default::default();
@@ -173,11 +180,42 @@ pub const RS_PUB_KEY: &str = match option_env!("RS_PUB_KEY") {
     Some(key) if !key.is_empty() => key,
     _ => "",
 };
+pub const BUILTIN_API_SERVER: &str = match option_env!("API_SERVER") {
+    Some(api) if !api.is_empty() => api,
+    _ => "",
+};
 
 pub const RENDEZVOUS_PORT: i32 = 21116;
 pub const RELAY_PORT: i32 = 21117;
 pub const WS_RENDEZVOUS_PORT: i32 = 21118;
 pub const WS_RELAY_PORT: i32 = 21119;
+
+fn builtin_api_server() -> String {
+    if !BUILTIN_API_SERVER.is_empty() {
+        return BUILTIN_API_SERVER.trim().trim_end_matches('/').to_string();
+    }
+    if let Some(server) = option_env!("RENDEZVOUS_SERVER") {
+        if !server.trim().is_empty() {
+            return api_server_from_rendezvous(server);
+        }
+    }
+    String::new()
+}
+
+fn api_server_from_rendezvous(server: &str) -> String {
+    let server = server.trim().trim_end_matches('/');
+    if server.starts_with("http://") || server.starts_with("https://") {
+        return server.to_string();
+    }
+    if let Some((host, port)) = server.rsplit_once(':') {
+        if !host.contains(':') {
+            if let Ok(port) = port.parse::<i32>() {
+                return format!("http://{}:{}", host, port - 2);
+            }
+        }
+    }
+    format!("http://{}:{}", server, RENDEZVOUS_PORT - 2)
+}
 
 #[inline]
 pub fn is_service_ipc_postfix(postfix: &str) -> bool {
